@@ -35,3 +35,15 @@ def sync_and_rollover():
 
     save_tasks(tasks)
     return tasks
+import time
+import sys
+
+def start_timer(minutes=25):
+    seconds = minutes * 60
+    while seconds > 0:
+        mins, secs = divmod(seconds, 60)
+        sys.stdout.write(f"\rFocus Mode: {mins:02d}:{secs:02d} remaining...")
+        sys.stdout.flush()
+        time.sleep(1)
+        seconds -= 1
+    print("\n✅ Session complete!")
