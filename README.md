@@ -16,5 +16,3 @@ add "Study Python" --p 3 - Adds a high-priority task.
 focus 15 - Starts a 15-minute study timer.
 
 del 1 - Deletes the first task on the list.
-
-done 1 - Marks the first task as completed.
