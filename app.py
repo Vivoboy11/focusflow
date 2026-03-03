@@ -30,6 +30,7 @@ def load_tasks():
 
 
 def sync_and_rollover():
+    """Moves unfinished tasks from yesterday to today automatically."""
     tasks = load_tasks()
     today = str(date.today())
     changed = False
@@ -44,20 +45,21 @@ def sync_and_rollover():
     return tasks
 
 
-# --- FEATURES ---
+# --- UPDATED FEATURES ---
 def start_pomodoro(minutes=25):
-    seconds = minutes * 60
-    print(f"\n🔥 Focus session started for {minutes} minutes!")
+    """Counts down for a focus session. Now accepts custom minutes."""
     try:
+        seconds = int(minutes) * 60
+        print(f"\n🔥 Focus session started for {minutes} minutes!")
         while seconds > 0:
-            mins, secs = divmod(seconds, 60)
-            sys.stdout.write(f"\rTime Remaining: {mins:02d}:{secs:02d} | Stay Focused!")
+            m, s = divmod(seconds, 60)
+            sys.stdout.write(f"\rTime Remaining: {m:02d}:{s:02d} | Stay Focused!")
             sys.stdout.flush()
             time.sleep(1)
             seconds -= 1
         print("\n✅ Session complete! Take a break.")
-    except KeyboardInterrupt:
-        print("\n⚠️ Timer stopped.")
+    except (KeyboardInterrupt, ValueError):
+        print("\n⚠️ Timer stopped or invalid duration.")
 
 
 # --- MAIN MENU ---
@@ -67,7 +69,7 @@ def main():
 
     while True:
         print(f"\n📅 Today: {date.today()}")
-        # Sort by priority (3 High, 1 Low)
+        # Sorting: Priority 3 (High) comes first
         current_tasks = sorted([t for t in tasks if t['date'] == str(date.today())],
                                key=lambda x: x['priority'], reverse=True)
 
@@ -76,22 +78,55 @@ def main():
             p_label = "!!!" if t['priority'] == 3 else "!! " if t['priority'] == 2 else "!  "
             print(f"{i}. {p_label} {status} {t['title']}")
 
-        cmd = input("\nCommands: [add 'task'] [done 'id'] [focus] [exit]: ").strip().lower()
+        print("\nCommands: [add 'task' --p 3] [done 'id'] [del 'id'] [focus 'min'] [exit]")
+        cmd = input("Choice: ").strip().lower()
 
+        # Feature: Add with optional Priority Flag
         if cmd.startswith("add "):
-            title = cmd[4:]
-            new_task = Task(title=title)
+            raw_input = cmd[4:]
+            priority = 2
+            if " --p " in raw_input:
+                title, p_val = raw_input.split(" --p ")
+                try:
+                    priority = int(p_val)
+                except ValueError:
+                    print("Invalid priority. Using 2.")
+            else:
+                title = raw_input
+
+            new_task = Task(title=title, priority=priority)
             tasks.append(new_task.to_dict())
             save_tasks(tasks)
+
+        # Feature: Mark Done
         elif cmd.startswith("done "):
             try:
                 idx = int(cmd[5:]) - 1
-                current_tasks[idx]['is_done'] = True
+                target = current_tasks[idx]
+                for t in tasks:
+                    if t['title'] == target['title'] and t['date'] == target['date']:
+                        t['is_done'] = True
                 save_tasks(tasks)
             except (IndexError, ValueError):
                 print("Invalid ID.")
-        elif cmd == "focus":
-            start_pomodoro()
+
+        # Feature: Delete Task
+        elif cmd.startswith("del "):
+            try:
+                idx = int(cmd[4:]) - 1
+                target = current_tasks[idx]
+                tasks = [t for t in tasks if not (t['title'] == target['title'] and t['date'] == target['date'])]
+                save_tasks(tasks)
+                print("🗑️ Task deleted.")
+            except (IndexError, ValueError):
+                print("Invalid ID.")
+
+        # Feature: Custom Timer
+        elif cmd.startswith("focus"):
+            parts = cmd.split()
+            mins = parts[1] if len(parts) > 1 else 25
+            start_pomodoro(mins)
+
         elif cmd == "exit":
             break
 
