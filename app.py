@@ -18,3 +18,20 @@ def save_tasks(tasks):
         json.dump([t.to_dict() if isinstance(t, Task) else t for t in tasks], f, indent=4)
 
 print("FocusFlow Engine Initialized.")
+
+
+def sync_and_rollover():
+    try:
+        with open('tasks.json', 'r') as f:
+            tasks = json.load(f)
+    except FileNotFoundError:
+        tasks = []
+
+    today = str(date.today())
+    for t in tasks:
+        if not t['is_done'] and t['date'] < today:
+            t['date'] = today
+            t['title'] += " (Rolled Over)"
+
+    save_tasks(tasks)
+    return tasks
