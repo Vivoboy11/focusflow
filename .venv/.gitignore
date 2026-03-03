@@ -2,3 +2,7 @@ tasks.json
 .venv/
 __pycache__/
 *.pyc
+build/
+dist/
+*.spec
+
