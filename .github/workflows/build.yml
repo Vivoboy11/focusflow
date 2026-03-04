@@ -39,8 +39,49 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet==0.80.3 flet-cli==0.80.3
 
-      - name: Install Flet patches into all site-packages
-        run: python install_patch.py
+      - name: Patch Flet bugs into all site-packages
+        run: |
+          cat << 'EOF' > apply_patch.py
+          import builtins, site, os, textwrap
+
+          patch = textwrap.dedent("""
+              import builtins as _b
+
+              def _unicode(data='', encoding='utf-8', errors='strict'):
+                  if encoding is None:
+                      encoding = 'utf-8'
+                  if isinstance(data, bytes):
+                      return data.decode(encoding, errors)
+                  return str(data)
+              _b.unicode = _unicode
+
+              _real_open = _b.open
+              def _safe_open(file, mode='r', buffering=-1, encoding=None, errors=None, **kw):
+                  if 'b' not in str(mode) and errors is None:
+                      errors = 'replace'
+                  return _real_open(file, mode, buffering, encoding=encoding, errors=errors, **kw)
+              _b.open = _safe_open
+          """).strip()
+
+          dirs = site.getsitepackages()
+          try:
+              dirs.append(site.getusersitepackages())
+          except Exception:
+              pass
+
+          for d in dirs:
+              try:
+                  os.makedirs(d, exist_ok=True)
+                  dest = os.path.join(d, 'sitecustomize.py')
+                  with open(dest, 'w') as f:
+                      f.write(patch)
+                  print(f'Installed to: {dest}')
+              except Exception as e:
+                  print(f'Skipped {d}: {e}')
+
+          print('Patch complete.')
+          EOF
+          python3 apply_patch.py
 
       - name: Build APK
         env:
