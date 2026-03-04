@@ -1,46 +1,85 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # ── 1. Checkout source code ───────────────────────────────────────────
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # ── 2. Java (required by Android SDK / Gradle) ────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
+      # ── 3. Flutter (pinned to a stable version) ───────────────────────────
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.22.2'   # pin to a known-good version
           channel: 'stable'
+          cache: true                  # built-in Flutter cache
 
+      # ── 4. Cache Pub & Gradle to speed up subsequent runs ─────────────────
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-pub-gradle-${{ hashFiles('**/pubspec.lock', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-gradle-
+
+      # ── 5. Accept Android SDK licences ────────────────────────────────────
       - name: Accept Android Licenses
         run: yes | flutter doctor --android-licenses || true
 
+      # ── 6. Python (required by Flet CLI) ──────────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
+      # ── 7. Install Flet (pinned version) ──────────────────────────────────
+      - name: Install Flet
         run: |
           python -m pip install --upgrade pip
-          pip install flet
+          pip install flet==0.24.1   # pin to your target version
 
-      # THE FIX: Tell Flet to completely skip the buggy 'flutter doctor' step!
+      # ── 8. Install Flutter project dependencies ───────────────────────────
+      - name: Get Flutter Dependencies
+        run: flutter pub get
+
+      # ── 9. Build the APK ──────────────────────────────────────────────────
       - name: Build APK
         run: flet build apk --skip-flutter-doctor
 
+      # ── 10. Verify the APK was produced (fail fast if path is wrong) ──────
+      - name: Verify APK exists
+        run: |
+          echo "── Listing build/apk ──"
+          find build/apk -name "*.apk" | tee /tmp/apk_list.txt
+          if [ ! -s /tmp/apk_list.txt ]; then
+            echo "ERROR: No APK found under build/apk!" && exit 1
+          fi
+
+      # ── 11. Upload APK as a downloadable artifact ─────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: FocusFlow-Mobile-App
           path: build/apk/*.apk
+          retention-days: 30          # keep artifact for 30 days
+          if-no-files-found: error    # fail clearly if APK is missing
