@@ -20,15 +20,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.5'
-          channel: 'stable'
-
-      - name: Accept Android Licenses
-        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -37,65 +28,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flet==0.80.3 flet-cli==0.80.3
-
-      - name: Patch Flet bugs into all site-packages
-        run: |
-          cat << 'EOF' > apply_patch.py
-          import site, os, textwrap
-
-          patch = textwrap.dedent("""
-              import builtins as _b
-
-              # Fix 1: Restore Python 2 unicode() built-in
-              def _unicode(data='', encoding='utf-8', errors='strict'):
-                  if encoding is None:
-                      encoding = 'utf-8'
-                  if isinstance(data, bytes):
-                      return data.decode(encoding, errors)
-                  return str(data)
-              _b.unicode = _unicode
-
-              # Fix 2: Patch open() but ONLY for known text extensions
-              _TEXT_EXTS = {
-                  '.py', '.txt', '.md', '.yaml', '.yml', '.json',
-                  '.xml', '.html', '.htm', '.css', '.js', '.dart',
-                  '.gradle', '.properties', '.toml', '.cfg', '.ini',
-                  '.tmpl', '.jinja', '.jinja2', '.template',
-              }
-              _real_open = _b.open
-              def _safe_open(file, mode='r', buffering=-1, encoding=None, errors=None, **kw):
-                  if 'b' not in str(mode) and errors is None and encoding is None:
-                      try:
-                          import os as _os
-                          _, ext = _os.path.splitext(str(file))
-                          if ext.lower() in _TEXT_EXTS or ext == '':
-                              errors = 'replace'
-                      except Exception:
-                          errors = 'replace'
-                  return _real_open(file, mode, buffering, encoding=encoding, errors=errors, **kw)
-              _b.open = _safe_open
-          """).strip()
-
-          dirs = site.getsitepackages()
-          try:
-              dirs.append(site.getusersitepackages())
-          except Exception:
-              pass
-
-          for d in dirs:
-              try:
-                  os.makedirs(d, exist_ok=True)
-                  dest = os.path.join(d, 'sitecustomize.py')
-                  with open(dest, 'w') as f:
-                      f.write(patch)
-                  print(f'Installed to: {dest}')
-              except Exception as e:
-                  print(f'Skipped {d}: {e}')
-
-          print('Patch complete.')
-          EOF
-          python3 apply_patch.py
+          pip install --upgrade flet
 
       - name: Build APK
         env:
