@@ -30,6 +30,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet
 
+      - name: Patch Flet unicode bug
+        run: |
+          # Find all flet_cli Python files containing the `unicode` call
+          FLET_PATH=$(python -c "import flet_cli; import os; print(os.path.dirname(flet_cli.__file__))")
+          echo "Flet CLI path: $FLET_PATH"
+
+          # Replace `unicode(` with `str(` throughout flet_cli source
+          # `unicode` is a Python 2 built-in that doesn't exist in Python 3
+          grep -rl "unicode(" "$FLET_PATH" | while read f; do
+            echo "Patching: $f"
+            sed -i 's/unicode(/str(/g' "$f"
+          done
+
+          # Also patch rich library if it's calling unicode
+          RICH_PATH=$(python -c "import rich; import os; print(os.path.dirname(rich.__file__))")
+          grep -rl "unicode(" "$RICH_PATH" | while read f; do
+            echo "Patching rich: $f"
+            sed -i 's/unicode(/str(/g' "$f"
+          done
+
+          echo "Patch complete"
+
       - name: Install App Dependencies
         run: |
           if [ -f requirements.txt ]; then
