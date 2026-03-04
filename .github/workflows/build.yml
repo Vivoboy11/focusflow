@@ -10,37 +10,48 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      NO_COLOR: "1"          # Disables Flet's rich color renderer → fixes "name 'unicode' is not defined"
+      PUB_ENVIRONMENT: "bot"  # Suppresses pub interactive prompts
+
     steps:
-      # ── 1. Checkout source code ───────────────────────────────────────────
+      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ── 2. Python 3.12 (required by Flet 0.25+ mobile runtime) ───────────
+      # ── 2. Python 3.12 ────────────────────────────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      # ── 3. Java 21 (required by Android SDK / Gradle) ─────────────────────
+      # ── 3. Java 17 (safe default for Android SDK 36) ──────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
-      # ── 4. Flutter (pinned stable, known to work with Flet 0.28.x) ────────
+      # ── 4. Flutter (unpinned — use whatever stable runner has) ────────────
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2'
           channel: 'stable'
           cache: true
 
-      # ── 5. Disable Flutter analytics (avoids interactive prompts) ─────────
-      - name: Disable Flutter Analytics
-        run: flutter config --no-analytics
+      # ── 5. Disable Flutter analytics ──────────────────────────────────────
+      - name: Configure Flutter
+        run: |
+          flutter config --no-analytics
+          flutter config --no-cli-animations
 
-      # ── 6. Cache Pub & Gradle ─────────────────────────────────────────────
+      # ── 6. Accept Android licenses ────────────────────────────────────────
+      - name: Accept Android Licenses
+        run: |
+          yes | flutter doctor --android-licenses || true
+          yes | sdkmanager --licenses || true
+
+      # ── 7. Cache Pub & Gradle ─────────────────────────────────────────────
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -48,39 +59,35 @@ jobs:
             ~/.pub-cache
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-deps-${{ hashFiles('**/pubspec.lock', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-deps-
+          key: ${{ runner.os }}-deps-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-deps-
 
-      # ── 7. Install Flet CLI (latest stable) ───────────────────────────────
+      # ── 8. Install Flet ───────────────────────────────────────────────────
       - name: Install Flet
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.28.3
 
-      # ── 8. Install app dependencies (if requirements.txt exists) ──────────
+      # ── 9. Install app dependencies ───────────────────────────────────────
       - name: Install App Dependencies
         run: |
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
 
-      # ── 9. Build the APK ──────────────────────────────────────────────────
-      #       Flet internally generates a Flutter project, runs pub get,
-      #       and compiles — no manual flutter pub get needed.
+      # ── 10. Build APK ─────────────────────────────────────────────────────
       - name: Build APK
         run: flet build apk --verbose
+        env:
+          NO_COLOR: "1"
 
-      # ── 10. Verify APK exists ─────────────────────────────────────────────
+      # ── 11. Verify APK ────────────────────────────────────────────────────
       - name: Verify APK exists
         run: |
-          echo "── Listing build/apk ──"
           find build/apk -name "*.apk" | tee /tmp/apk_list.txt
-          if [ ! -s /tmp/apk_list.txt ]; then
-            echo "ERROR: No APK found under build/apk!" && exit 1
-          fi
+          [ -s /tmp/apk_list.txt ] || (echo "ERROR: No APK found!" && exit 1)
 
-      # ── 11. Upload APK as downloadable artifact ───────────────────────────
+      # ── 12. Upload Artifact ───────────────────────────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
