@@ -58,15 +58,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet==0.24.1   # pin to your target version
 
-      # ── 8. Install Flutter project dependencies ───────────────────────────
-      - name: Get Flutter Dependencies
-        run: flutter pub get
-
-      # ── 9. Build the APK ──────────────────────────────────────────────────
+      # ── 8. Build the APK (Flet manages its own Flutter project internally) ─
       - name: Build APK
         run: flet build apk --skip-flutter-doctor
 
-      # ── 10. Verify the APK was produced (fail fast if path is wrong) ──────
+      # ── 9. Verify the APK was produced (fail fast if path is wrong) ───────
       - name: Verify APK exists
         run: |
           echo "── Listing build/apk ──"
@@ -75,7 +71,7 @@ jobs:
             echo "ERROR: No APK found under build/apk!" && exit 1
           fi
 
-      # ── 11. Upload APK as a downloadable artifact ─────────────────────────
+      # ── 10. Upload APK as a downloadable artifact ─────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
