@@ -6,6 +6,15 @@ on:
     branches:
       - main
 
+env:
+  FLET_CLI_VERSION: "0.81.0"
+  BUILD_NUMBER: 1
+  BUILD_VERSION: 1.0.0
+  PYTHON_VERSION: "3.12"
+  JAVA_VERSION: "21"
+  PYTHONUTF8: "1"
+  FLET_CLI_NO_RICH_OUTPUT: "1"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,29 +26,18 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Install Flet
+      - name: Install flet-cli only
         run: |
           python -m pip install --upgrade pip
-          pip install flet
-
-      - name: Patch unicode bug everywhere
-        run: |
-          # Patch every Python file in site-packages that uses unicode()
-          SITE=$(python -c "import site; print(site.getsitepackages()[0])")
-          echo "Scanning: $SITE"
-          grep -rl --include="*.py" "unicode(" "$SITE" | while read f; do
-            echo "Patching: $f"
-            sed -i 's/\bunicode(/str(/g' "$f"
-          done
-          echo "Done patching site-packages"
+          pip install flet-cli==${{ env.FLET_CLI_VERSION }}
 
       - name: Install App Dependencies
         run: |
@@ -50,21 +48,16 @@ jobs:
       - name: Create pyproject.toml
         run: |
           if [ ! -f pyproject.toml ]; then
-            printf '[project]\nname = "focusflow"\nversion = "1.0.0"\ndescription = "FocusFlow Mobile App"\ndependencies = ["flet"]\n\n[tool.flet]\norg = "com.focusflow"\nproduct = "FocusFlow"\n' > pyproject.toml
+            printf '[project]\nname = "focusflow"\nversion = "%s"\ndescription = "FocusFlow Mobile App"\ndependencies = ["flet"]\n\n[tool.flet]\norg = "com.focusflow"\nproduct = "FocusFlow"\n' "${{ env.BUILD_VERSION }}" > pyproject.toml
           fi
 
       - name: Build APK
-        env:
-          FLET_CLI_SKIP_FLUTTER_DOCTOR: "true"
         run: |
-          # Also patch any files downloaded at runtime into home dir
-          flet build apk --yes --verbose || true
-          grep -rl --include="*.py" "unicode(" ~/.flet 2>/dev/null | while read f; do
-            echo "Patching runtime file: $f"
-            sed -i 's/\bunicode(/str(/g' "$f"
-          done
-          # Retry after patching runtime files
-          flet build apk --yes --verbose
+          flet build apk \
+            --build-number ${{ env.BUILD_NUMBER }} \
+            --build-version ${{ env.BUILD_VERSION }} \
+            --yes \
+            --verbose
 
       - name: Verify APK exists
         run: |
