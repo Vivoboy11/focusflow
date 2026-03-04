@@ -10,12 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      NO_COLOR: "1"          # Disables Flet's rich color renderer → fixes "name 'unicode' is not defined"
-      PUB_ENVIRONMENT: "bot"  # Suppresses pub interactive prompts
-
     steps:
-      # ── 1. Checkout ───────────────────────────────────────────────────────
+      # ── 1. Checkout source code ───────────────────────────────────────────
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -25,69 +21,45 @@ jobs:
         with:
           python-version: '3.12'
 
-      # ── 3. Java 17 (safe default for Android SDK 36) ──────────────────────
+      # ── 3. Java 17 (as per official Flet Android docs) ────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 4. Flutter (unpinned — use whatever stable runner has) ────────────
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-
-      # ── 5. Disable Flutter analytics ──────────────────────────────────────
-      - name: Configure Flutter
-        run: |
-          flutter config --no-analytics
-          flutter config --no-cli-animations
-
-      # ── 6. Accept Android licenses ────────────────────────────────────────
-      - name: Accept Android Licenses
-        run: |
-          yes | flutter doctor --android-licenses || true
-          yes | sdkmanager --licenses || true
-
-      # ── 7. Cache Pub & Gradle ─────────────────────────────────────────────
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-deps-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: ${{ runner.os }}-deps-
-
-      # ── 8. Install Flet ───────────────────────────────────────────────────
+      # ── 4. Install Flet ───────────────────────────────────────────────────
+      #       NOTE: Do NOT pre-install Flutter via subosito/flutter-action.
+      #       Flet downloads and manages its own Flutter version internally.
+      #       Pre-installing Flutter causes the 'unicode is not defined' crash
+      #       when Flet tries to parse the output of the system Flutter binary.
       - name: Install Flet
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.28.3
 
-      # ── 9. Install app dependencies ───────────────────────────────────────
+      # ── 5. Install app dependencies (if requirements.txt exists) ──────────
       - name: Install App Dependencies
         run: |
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
 
-      # ── 10. Build APK ─────────────────────────────────────────────────────
+      # ── 6. Build the APK ──────────────────────────────────────────────────
+      #       Flet will auto-download Flutter, install Android SDK,
+      #       accept licenses, and compile — all automatically.
       - name: Build APK
         run: flet build apk --verbose
-        env:
-          NO_COLOR: "1"
 
-      # ── 11. Verify APK ────────────────────────────────────────────────────
+      # ── 7. Verify APK exists ──────────────────────────────────────────────
       - name: Verify APK exists
         run: |
           find build/apk -name "*.apk" | tee /tmp/apk_list.txt
-          [ -s /tmp/apk_list.txt ] || (echo "ERROR: No APK found!" && exit 1)
+          if [ ! -s /tmp/apk_list.txt ]; then
+            echo "ERROR: No APK found!" && exit 1
+          fi
 
-      # ── 12. Upload Artifact ───────────────────────────────────────────────
+      # ── 8. Upload APK ─────────────────────────────────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
