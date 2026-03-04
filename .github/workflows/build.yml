@@ -14,41 +14,36 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. Setup Java 17 (Required for standard Flutter/Android SDK compilation)
+      # 1. Setup Java 17
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # 2. Pre-install Flutter to completely bypass Flet's internal downloader
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
+      # 2. Accept Android Licenses (Using native Android SDK tool)
       - name: Accept Android Licenses
-        run: yes | flutter doctor --android-licenses || true
+        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      # 3. Use Python 3.11 to prevent Flet's template engine from throwing the 'unicode' error
+      # 3. Use Python 3.11
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 4. Lock requirements so the isolated Flet environment uses the stable version
+      # 4. Lock requirements
       - name: Create Requirements
         run: echo "flet==0.80.3" > requirements.txt
 
       # 5. Install the stable Flet CLI
-      - name: Install flet-cli
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.80.3 flet-cli==0.80.3
 
-      # 6. Build the APK using explicit CLI flags rather than environment variables
+      # 6. Build the APK (ADDED --yes TO AUTO-ACCEPT ALL PROMPTS!)
       - name: Build APK
-        run: flet build apk --skip-flutter-doctor --no-rich-output
+        run: flet build apk --skip-flutter-doctor --no-rich-output --yes
 
       # 7. Upload the compiled App file
       - name: Upload APK Artifact
