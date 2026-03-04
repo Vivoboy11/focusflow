@@ -29,9 +29,26 @@ def main(page: ft.Page):
         stats_text.value = get_stats()
         page.update()
 
+    # ADDED BACK: The function that actually saves the checkbox state
+    def toggle_task_status(e, task_title):
+        current_data = load_tasks()
+        for t in current_data:
+            if t['title'] == task_title:
+                t['is_done'] = e.control.value
+        save_tasks(current_data)
+        stats_text.value = get_stats()
+        page.update()
+
     def add_task_ui(task_title, is_done=False):
         task_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-        cb = ft.Checkbox(label=task_title, value=is_done, expand=True)
+
+        # ADDED BACK: The on_change event linking the checkbox to the function above
+        cb = ft.Checkbox(
+            label=task_title,
+            value=is_done,
+            expand=True,
+            on_change=lambda e: toggle_task_status(e, task_title)
+        )
 
         delete_button = ft.TextButton(
             "Delete",
@@ -54,21 +71,18 @@ def main(page: ft.Page):
             page.update()
 
     # --- THE ADVANCED ANDROID TIMER LOGIC ---
-    # We now track both if it's running AND exactly how much time is left
     timer_state = {
         "is_running": False,
         "time_left": 25 * 60
     }
 
     def start_timer(e):
-        # Don't start if already running or if time is at 0
         if timer_state["is_running"] or timer_state["time_left"] <= 0:
             return
 
         timer_state["is_running"] = True
 
         async def run_countdown():
-            # Calculate end time based on exactly how much time is currently left
             end_time = time.time() + timer_state["time_left"]
 
             while timer_state["is_running"]:
@@ -81,7 +95,6 @@ def main(page: ft.Page):
                     page.update()
                     break
 
-                # Update the stored time left so pause knows where we stopped
                 timer_state["time_left"] = seconds_left
 
                 mins, secs = divmod(seconds_left, 60)
@@ -93,15 +106,13 @@ def main(page: ft.Page):
         page.run_task(run_countdown)
 
     def pause_timer(e):
-        # Flipping this to False breaks the while loop instantly
         timer_state["is_running"] = False
         page.update()
 
     def reset_timer(e):
-        # Stop the loop and reset the variables to 25 mins
         timer_state["is_running"] = False
-        timer_state["time_left"] = 25 * 60
-        timer_text.value = "25:00"
+        timer_state["time_left"] = 60 * 60
+        timer_text.value = "60:00"
         page.update()
 
     # --- INITIAL LOAD ---
@@ -116,7 +127,6 @@ def main(page: ft.Page):
         tasks_view
     ])
 
-    # ADDED: A row of three buttons for full timer control
     timer_controls = ft.Row(
         controls=[
             ft.ElevatedButton("Start", on_click=start_timer, color="green"),
