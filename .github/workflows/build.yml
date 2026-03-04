@@ -41,6 +41,7 @@ jobs:
           pip install flet
 
       # 6. Build the APK (Notice we removed the 'yes |' hack!)
+      # 6. Build the APK (Make sure 'yes |' is completely removed)
       - name: Build APK
         run: flet build apk
 
