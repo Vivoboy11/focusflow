@@ -6,12 +6,16 @@ on:
     branches:
       - main
 
+env:
+  FLUTTER_VERSION: '3.29.2'
+  PYTHON_VERSION: '3.12.2'
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout source code ───────────────────────────────────────────
+      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -19,63 +23,49 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      # ── 3. Java 17 ────────────────────────────────────────────────────────
+      # ── 3. Java 21 ────────────────────────────────────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
-      # ── 4. Hide pre-installed Flutter from Flet ───────────────────────────
-      #       ubuntu-latest ships with Flutter already installed at
-      #       /usr/local/share/flutter. Flet detects it, runs flutter doctor,
-      #       and crashes with "name 'unicode' is not defined" while parsing
-      #       the output. We rename the binary to hide it so Flet downloads
-      #       and manages its own Flutter instead.
-      - name: Hide system Flutter
+      # ── 4. Flutter (must be installed BEFORE flet) ────────────────────────
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      # ── 5. Disable Flutter analytics ──────────────────────────────────────
+      #       This prevents Flet from running `flutter doctor`, which is the
+      #       root cause of the "name 'unicode' is not defined" crash.
+      - name: Disable Flutter Analytics
         run: |
-          FLUTTER_BIN=$(which flutter 2>/dev/null || true)
-          if [ -n "$FLUTTER_BIN" ]; then
-            sudo mv "$FLUTTER_BIN" "${FLUTTER_BIN}.bak"
-            echo "Hid system Flutter at $FLUTTER_BIN"
-          else
-            echo "No system Flutter found, nothing to hide"
-          fi
+          flutter config --no-analytics
+          flutter config --no-cli-animations
 
-      # ── 5. Install Flet ───────────────────────────────────────────────────
+      # ── 6. Install Flet ───────────────────────────────────────────────────
       - name: Install Flet
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.28.3
 
-      # ── 6. Create minimal pyproject.toml (required by Flet build) ─────────
-      #       Without this, flet build may fail finding app metadata.
-      - name: Create pyproject.toml
+      # ── 7. Install app dependencies ───────────────────────────────────────
+      - name: Install App Dependencies
         run: |
-          if [ ! -f pyproject.toml ]; then
-            cat > pyproject.toml << 'TOML'
-          [project]
-          name = "focusflow"
-          version = "1.0.0"
-          description = "FocusFlow Mobile App"
-          dependencies = ["flet==0.28.3"]
-
-          [tool.flet]
-          org = "com.focusflow"
-          product = "FocusFlow"
-          TOML
-            echo "Created pyproject.toml"
-          else
-            echo "pyproject.toml already exists, skipping"
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
           fi
 
-      # ── 7. Build the APK ──────────────────────────────────────────────────
+      # ── 8. Build APK ──────────────────────────────────────────────────────
       - name: Build APK
         run: flet build apk --verbose
 
-      # ── 8. Verify APK exists ──────────────────────────────────────────────
+      # ── 9. Verify APK ─────────────────────────────────────────────────────
       - name: Verify APK exists
         run: |
           find build/apk -name "*.apk" | tee /tmp/apk_list.txt
@@ -83,7 +73,7 @@ jobs:
             echo "ERROR: No APK found!" && exit 1
           fi
 
-      # ── 9. Upload APK ─────────────────────────────────────────────────────
+      # ── 10. Upload APK ────────────────────────────────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
