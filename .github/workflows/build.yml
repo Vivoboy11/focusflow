@@ -30,26 +30,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet
 
-      - name: Patch Flet unicode bug
+      - name: Patch unicode bug everywhere
         run: |
-          # Find flet_cli location using pip show (works even without importable module)
-          FLET_CLI_PATH=$(pip show flet-cli 2>/dev/null | grep Location | awk '{print $2}')
-          echo "flet-cli location: $FLET_CLI_PATH"
-
-          if [ -n "$FLET_CLI_PATH" ]; then
-            echo "Patching unicode -> str in flet_cli..."
-            find "$FLET_CLI_PATH/flet_cli" -name "*.py" | xargs grep -l "unicode(" 2>/dev/null | while read f; do
-              echo "  Patching: $f"
-              sed -i 's/unicode(/str(/g' "$f"
-            done
-            echo "Patch complete"
-          else
-            echo "WARNING: flet-cli not found via pip show, trying fallback..."
-            find $(python -c "import sys; print(' '.join(sys.path))") -path "*/flet_cli/*.py" 2>/dev/null | xargs grep -l "unicode(" 2>/dev/null | while read f; do
-              echo "  Patching: $f"
-              sed -i 's/unicode(/str(/g' "$f"
-            done
-          fi
+          # Patch every Python file in site-packages that uses unicode()
+          SITE=$(python -c "import site; print(site.getsitepackages()[0])")
+          echo "Scanning: $SITE"
+          grep -rl --include="*.py" "unicode(" "$SITE" | while read f; do
+            echo "Patching: $f"
+            sed -i 's/\bunicode(/str(/g' "$f"
+          done
+          echo "Done patching site-packages"
 
       - name: Install App Dependencies
         run: |
@@ -66,7 +56,15 @@ jobs:
       - name: Build APK
         env:
           FLET_CLI_SKIP_FLUTTER_DOCTOR: "true"
-        run: flet build apk --yes --verbose
+        run: |
+          # Also patch any files downloaded at runtime into home dir
+          flet build apk --yes --verbose || true
+          grep -rl --include="*.py" "unicode(" ~/.flet 2>/dev/null | while read f; do
+            echo "Patching runtime file: $f"
+            sed -i 's/\bunicode(/str(/g' "$f"
+          done
+          # Retry after patching runtime files
+          flet build apk --yes --verbose
 
       - name: Verify APK exists
         run: |
