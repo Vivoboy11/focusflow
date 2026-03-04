@@ -1,7 +1,7 @@
 import flet as ft
 import time
 import asyncio
-from datetime import datetime  # ADDED: Python's built-in time tracker
+from datetime import datetime
 from app import load_tasks, save_tasks, Task
 
 
@@ -47,11 +47,23 @@ def main(page: ft.Page):
         stats_text.value = get_stats()
         page.update()
 
-    # MODIFIED: Now accepts a 'task_date' argument
+    # ADDED: Function to wipe all completed tasks
+    def clear_completed(e):
+        current_data = load_tasks()
+        # Keep only tasks that are NOT done
+        incomplete_tasks = [t for t in current_data if not t.get('is_done')]
+        save_tasks(incomplete_tasks)
+
+        # Completely refresh the UI list
+        tasks_view.controls.clear()
+        for t in incomplete_tasks:
+            add_task_ui(t['title'], t.get('is_done', False), t.get('date', ''))
+
+        stats_text.value = get_stats()
+        page.update()
+
     def add_task_ui(task_title, is_done=False, task_date=""):
         task_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-
-        # Combine the title and the date for a clean mobile display
         display_label = f"{task_title} ({task_date})" if task_date else task_title
 
         cb = ft.Checkbox(
@@ -73,16 +85,12 @@ def main(page: ft.Page):
 
     def handle_add(e):
         if new_task_input.value:
-            # Grab the current Date and Day (e.g., "Wed, Mar 04")
             current_date = datetime.now().strftime("%a, %b %d")
-
-            # Update the UI
             add_task_ui(new_task_input.value, False, current_date)
 
-            # Save it to the database
             tasks = load_tasks()
             new_task_dict = Task(new_task_input.value).to_dict()
-            new_task_dict["date"] = current_date  # Inject the date into the save file
+            new_task_dict["date"] = current_date
             tasks.append(new_task_dict)
             save_tasks(tasks)
 
@@ -132,7 +140,6 @@ def main(page: ft.Page):
                     break
 
                 timer_state["time_left"] = seconds_left
-
                 mins, secs = divmod(seconds_left, 60)
                 timer_text.value = f"{mins:02d}:{secs:02d}"
                 page.update()
@@ -148,21 +155,28 @@ def main(page: ft.Page):
     def reset_timer(e):
         timer_state["is_running"] = False
         timer_state["time_left"] = timer_state["allocated_time"]
-
         mins, secs = divmod(timer_state["allocated_time"], 60)
         timer_text.value = f"{mins:02d}:{secs:02d}"
         page.update()
 
     # --- INITIAL LOAD ---
     for t in load_tasks():
-        # Load the date if it exists, otherwise leave it blank for old tasks
         add_task_ui(t['title'], t.get('is_done', False), t.get('date', ''))
 
     # --- TAB CONTENT SCREENS ---
+    stats_row = ft.Row(
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        controls=[
+            stats_text,
+            # FIXED: Replaced ft.icons.CLEAR_ALL with the stable "delete" string
+            ft.TextButton("Clear Completed", icon="delete", on_click=clear_completed)
+        ]
+    )
+
     tasks_content = ft.Column([
         ft.Row([new_task_input, ft.ElevatedButton("Add", on_click=handle_add)]),
         ft.Divider(),
-        stats_text,
+        stats_row,
         tasks_view
     ])
 
