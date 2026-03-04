@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # Downgraded to 22.04 as it is significantly more stable for Android compiling
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Code
@@ -20,11 +20,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
       - name: Accept Android Licenses
         run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
@@ -33,18 +28,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      # THE ULTIMATE FIX: Inject 'unicode' directly into Python's brain to bypass the crash!
-      - name: Patch Python Unicode Bug Globally
-        run: |
-          echo "import builtins; builtins.unicode = str" > sitecustomize.py
-          echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
+      # 1. Lock the internal app compiler to 0.80.3
+      - name: Lock App Requirements
+        run: echo "flet==0.80.3" > requirements.txt
 
+      # 2. Lock the cloud server to 0.80.3 (THIS WAS MISSING BEFORE!)
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flet
+          pip install flet==0.80.3 flet-cli==0.80.3
 
-      # PREEMPTIVE FIX: Limit Gradle memory to prevent the server from crashing during compiling
+      # 3. Build the APK smoothly
       - name: Build APK
         env:
           _JAVA_OPTIONS: "-Xmx3200m"
