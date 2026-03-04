@@ -6,10 +6,6 @@ on:
     branches:
       - main
 
-env:
-  FLUTTER_VERSION: '3.29.2'
-  PYTHON_VERSION: '3.12.2'
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,49 +19,39 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: '3.12'
 
-      # ── 3. Java 21 ────────────────────────────────────────────────────────
+      # ── 3. Java 17 ────────────────────────────────────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
-      # ── 4. Flutter (must be installed BEFORE flet) ────────────────────────
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-          cache: true
-
-      # ── 5. Disable Flutter analytics ──────────────────────────────────────
-      #       This prevents Flet from running `flutter doctor`, which is the
-      #       root cause of the "name 'unicode' is not defined" crash.
-      - name: Disable Flutter Analytics
-        run: |
-          flutter config --no-analytics
-          flutter config --no-cli-animations
-
-      # ── 6. Install Flet ───────────────────────────────────────────────────
+      # ── 4. Install latest Flet ────────────────────────────────────────────
       - name: Install Flet
         run: |
           python -m pip install --upgrade pip
-          pip install flet==0.28.3
+          pip install flet
 
-      # ── 7. Install app dependencies ───────────────────────────────────────
+      # ── 5. Install app dependencies ───────────────────────────────────────
       - name: Install App Dependencies
         run: |
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
 
-      # ── 8. Build APK ──────────────────────────────────────────────────────
+      # ── 6. Build APK ──────────────────────────────────────────────────────
+      #   FLET_CLI_NO_RICH_OUTPUT=1  → disables the Rich console renderer that
+      #                                uses Python-2-only `unicode` type calls
+      #   --skip-flutter-doctor      → skips flutter doctor output parsing
+      #                                entirely (added in Flet 0.25+)
       - name: Build APK
-        run: flet build apk --verbose
+        env:
+          FLET_CLI_NO_RICH_OUTPUT: "1"
+        run: flet build apk --skip-flutter-doctor --verbose
 
-      # ── 9. Verify APK ─────────────────────────────────────────────────────
+      # ── 7. Verify APK ─────────────────────────────────────────────────────
       - name: Verify APK exists
         run: |
           find build/apk -name "*.apk" | tee /tmp/apk_list.txt
@@ -73,7 +59,7 @@ jobs:
             echo "ERROR: No APK found!" && exit 1
           fi
 
-      # ── 10. Upload APK ────────────────────────────────────────────────────
+      # ── 8. Upload APK ─────────────────────────────────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
