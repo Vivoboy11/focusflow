@@ -14,6 +14,15 @@ def main(page: ft.Page):
     timer_text = ft.Text("25:00", size=40, weight="bold")
     new_task_input = ft.TextField(hint_text="New task...", expand=True)
 
+    # ADDED: Input field for custom minutes
+    timer_input = ft.TextField(
+        value="25",
+        label="Minutes",
+        width=100,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        text_align=ft.TextAlign.CENTER
+    )
+
     def get_stats():
         tasks = load_tasks()
         completed = len([t for t in tasks if t.get('is_done')])
@@ -29,7 +38,6 @@ def main(page: ft.Page):
         stats_text.value = get_stats()
         page.update()
 
-    # ADDED BACK: The function that actually saves the checkbox state
     def toggle_task_status(e, task_title):
         current_data = load_tasks()
         for t in current_data:
@@ -42,7 +50,6 @@ def main(page: ft.Page):
     def add_task_ui(task_title, is_done=False):
         task_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-        # ADDED BACK: The on_change event linking the checkbox to the function above
         cb = ft.Checkbox(
             label=task_title,
             value=is_done,
@@ -71,10 +78,29 @@ def main(page: ft.Page):
             page.update()
 
     # --- THE ADVANCED ANDROID TIMER LOGIC ---
+    # ADDED: 'allocated_time' to remember what the custom reset time should be
     timer_state = {
         "is_running": False,
-        "time_left": 25 * 60
+        "time_left": 25 * 60,
+        "allocated_time": 25 * 60
     }
+
+    # ADDED: Function to process the custom time input
+    def set_custom_time(e):
+        try:
+            mins = int(timer_input.value)
+            if mins <= 0:
+                mins = 25  # Fallback if user types 0 or negative
+        except ValueError:
+            mins = 25  # Fallback if user leaves it blank or types text
+
+        # Stop any running timer and apply the new time
+        timer_state["is_running"] = False
+        timer_state["allocated_time"] = mins * 60
+        timer_state["time_left"] = mins * 60
+
+        timer_text.value = f"{mins:02d}:00"
+        page.update()
 
     def start_timer(e):
         if timer_state["is_running"] or timer_state["time_left"] <= 0:
@@ -110,9 +136,12 @@ def main(page: ft.Page):
         page.update()
 
     def reset_timer(e):
+        # MODIFIED: Resets to whatever custom time the user allocated, not a hardcoded 60:00
         timer_state["is_running"] = False
-        timer_state["time_left"] = 60 * 60
-        timer_text.value = "60:00"
+        timer_state["time_left"] = timer_state["allocated_time"]
+
+        mins, secs = divmod(timer_state["allocated_time"], 60)
+        timer_text.value = f"{mins:02d}:{secs:02d}"
         page.update()
 
     # --- INITIAL LOAD ---
@@ -136,9 +165,20 @@ def main(page: ft.Page):
         alignment=ft.MainAxisAlignment.CENTER
     )
 
+    # ADDED: A row to hold the input field and the 'Set' button side-by-side
+    timer_setup_row = ft.Row(
+        controls=[
+            timer_input,
+            ft.ElevatedButton("Set", on_click=set_custom_time)
+        ],
+        alignment=ft.MainAxisAlignment.CENTER
+    )
+
     focus_content = ft.Column(
         controls=[
-            ft.Container(height=50),
+            ft.Container(height=30),
+            timer_setup_row,  # Placed the setup row here
+            ft.Container(height=20),
             timer_text,
             timer_controls
         ],
