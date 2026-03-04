@@ -53,38 +53,56 @@ def main(page: ft.Page):
             stats_text.value = get_stats()
             page.update()
 
-    # --- THE ASYNC ANDROID TIMER ---
-    timer_state = {"is_running": False}
+    # --- THE ADVANCED ANDROID TIMER LOGIC ---
+    # We now track both if it's running AND exactly how much time is left
+    timer_state = {
+        "is_running": False,
+        "time_left": 25 * 60
+    }
 
     def start_timer(e):
-        if timer_state["is_running"]:
+        # Don't start if already running or if time is at 0
+        if timer_state["is_running"] or timer_state["time_left"] <= 0:
             return
 
         timer_state["is_running"] = True
 
-        # 1. Use an 'async' function so it runs in Flet's native event loop
         async def run_countdown():
-            end_time = time.time() + (25 * 60)
+            # Calculate end time based on exactly how much time is currently left
+            end_time = time.time() + timer_state["time_left"]
 
-            while True:
+            while timer_state["is_running"]:
                 seconds_left = int(end_time - time.time())
 
                 if seconds_left <= 0:
+                    timer_state["time_left"] = 0
+                    timer_state["is_running"] = False
+                    timer_text.value = "Done!"
+                    page.update()
                     break
+
+                # Update the stored time left so pause knows where we stopped
+                timer_state["time_left"] = seconds_left
 
                 mins, secs = divmod(seconds_left, 60)
                 timer_text.value = f"{mins:02d}:{secs:02d}"
-                page.update()  # 2. Use page.update() to guarantee Android refreshes the UI
+                page.update()
 
-                # 3. Use async sleep so the app doesn't freeze
                 await asyncio.sleep(0.5)
 
-            timer_text.value = "Done!"
-            page.update()
-            timer_state["is_running"] = False
-
-        # 4. Use Flet's built-in background task runner instead of raw threading
         page.run_task(run_countdown)
+
+    def pause_timer(e):
+        # Flipping this to False breaks the while loop instantly
+        timer_state["is_running"] = False
+        page.update()
+
+    def reset_timer(e):
+        # Stop the loop and reset the variables to 25 mins
+        timer_state["is_running"] = False
+        timer_state["time_left"] = 25 * 60
+        timer_text.value = "25:00"
+        page.update()
 
     # --- INITIAL LOAD ---
     for t in load_tasks():
@@ -98,11 +116,21 @@ def main(page: ft.Page):
         tasks_view
     ])
 
+    # ADDED: A row of three buttons for full timer control
+    timer_controls = ft.Row(
+        controls=[
+            ft.ElevatedButton("Start", on_click=start_timer, color="green"),
+            ft.ElevatedButton("Pause", on_click=pause_timer, color="orange"),
+            ft.ElevatedButton("Reset", on_click=reset_timer, color="red"),
+        ],
+        alignment=ft.MainAxisAlignment.CENTER
+    )
+
     focus_content = ft.Column(
         controls=[
             ft.Container(height=50),
             timer_text,
-            ft.ElevatedButton("Start Focus", on_click=start_timer)
+            timer_controls
         ],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER
     )
