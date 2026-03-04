@@ -42,11 +42,21 @@ jobs:
         run: |
           SITE=$(python -c "import site; print(site.getsitepackages()[0])")
           echo "Patching $SITE..."
+
+          # Fix 1: unicode(x) with no encoding -> str(x)
           grep -rl --include="*.py" "unicode(" "$SITE" 2>/dev/null | while read f; do
             echo "  -> $f"
-            sed -i 's/\bunicode(/str(/g' "$f"
+            # unicode(x, enc) -> x.decode(enc) if enc else str(x)
+            sed -i \
+              -e 's/unicode(\([^,)]*\), *\([^)]*\))/(\1).decode(\2) if isinstance(\1, bytes) else str(\1)/g' \
+              -e 's/unicode(\([^)]*\))/str(\1)/g' \
+              "$f"
           done
+
           echo "Patch done."
+          # Verify no unicode( calls remain
+          COUNT=$(grep -rl --include="*.py" "unicode(" "$SITE" 2>/dev/null | wc -l)
+          echo "Remaining files with unicode(): $COUNT"
 
       - name: Accept Android licenses
         run: |
