@@ -41,29 +41,32 @@ jobs:
             pip install -r requirements.txt
           fi
 
-      # ── 6. Pre-install Flutter SDK that Flet 0.81 requires ────────────────
-      #       Flet 0.81 needs Flutter 3.41.2 and prompts "Install now? [y/n]"
-      #       in CI there is no terminal to answer, so we pre-install the
-      #       exact version Flet expects to skip the prompt entirely.
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.29.2'
-          channel: 'stable'
-          cache: true
-
-      - name: Disable Flutter Analytics
+      # ── 6. Create pyproject.toml if missing ───────────────────────────────
+      - name: Create pyproject.toml
         run: |
-          flutter config --no-analytics
-          flutter config --no-cli-animations
+          if [ ! -f pyproject.toml ]; then
+            cat > pyproject.toml << 'TOML'
+[project]
+name = "focusflow"
+version = "1.0.0"
+description = "FocusFlow Mobile App"
+dependencies = ["flet"]
+
+[tool.flet]
+org = "com.focusflow"
+product = "FocusFlow"
+TOML
+          fi
 
       # ── 7. Build APK ──────────────────────────────────────────────────────
-      #       echo "y" pipes "yes" to any remaining prompts
-      #       FLET_CLI_NO_RICH_OUTPUT suppresses unicode crash
+      #   --yes                        → auto-answer YES to all prompts
+      #                                  (including "install Flutter SDK?")
+      #   FLET_CLI_SKIP_FLUTTER_DOCTOR → skip flutter doctor entirely,
+      #                                  preventing the unicode crash
       - name: Build APK
         env:
-          FLET_CLI_NO_RICH_OUTPUT: "1"
-        run: echo "y" | flet build apk --skip-flutter-doctor --verbose
+          FLET_CLI_SKIP_FLUTTER_DOCTOR: "true"
+        run: flet build apk --yes --verbose
 
       # ── 8. Verify APK ─────────────────────────────────────────────────────
       - name: Verify APK exists
