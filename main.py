@@ -1,6 +1,7 @@
 import flet as ft
 import time
 import asyncio
+from datetime import datetime  # ADDED: Python's built-in time tracker
 from app import load_tasks, save_tasks, Task
 
 
@@ -14,7 +15,6 @@ def main(page: ft.Page):
     timer_text = ft.Text("25:00", size=40, weight="bold")
     new_task_input = ft.TextField(hint_text="New task...", expand=True)
 
-    # ADDED: Input field for custom minutes
     timer_input = ft.TextField(
         value="25",
         label="Minutes",
@@ -47,11 +47,15 @@ def main(page: ft.Page):
         stats_text.value = get_stats()
         page.update()
 
-    def add_task_ui(task_title, is_done=False):
+    # MODIFIED: Now accepts a 'task_date' argument
+    def add_task_ui(task_title, is_done=False, task_date=""):
         task_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
+        # Combine the title and the date for a clean mobile display
+        display_label = f"{task_title} ({task_date})" if task_date else task_title
+
         cb = ft.Checkbox(
-            label=task_title,
+            label=display_label,
             value=is_done,
             expand=True,
             on_change=lambda e: toggle_task_status(e, task_title)
@@ -69,32 +73,38 @@ def main(page: ft.Page):
 
     def handle_add(e):
         if new_task_input.value:
-            add_task_ui(new_task_input.value)
+            # Grab the current Date and Day (e.g., "Wed, Mar 04")
+            current_date = datetime.now().strftime("%a, %b %d")
+
+            # Update the UI
+            add_task_ui(new_task_input.value, False, current_date)
+
+            # Save it to the database
             tasks = load_tasks()
-            tasks.append(Task(new_task_input.value).to_dict())
+            new_task_dict = Task(new_task_input.value).to_dict()
+            new_task_dict["date"] = current_date  # Inject the date into the save file
+            tasks.append(new_task_dict)
             save_tasks(tasks)
+
             new_task_input.value = ""
             stats_text.value = get_stats()
             page.update()
 
     # --- THE ADVANCED ANDROID TIMER LOGIC ---
-    # ADDED: 'allocated_time' to remember what the custom reset time should be
     timer_state = {
         "is_running": False,
         "time_left": 25 * 60,
         "allocated_time": 25 * 60
     }
 
-    # ADDED: Function to process the custom time input
     def set_custom_time(e):
         try:
             mins = int(timer_input.value)
             if mins <= 0:
-                mins = 25  # Fallback if user types 0 or negative
+                mins = 25
         except ValueError:
-            mins = 25  # Fallback if user leaves it blank or types text
+            mins = 25
 
-        # Stop any running timer and apply the new time
         timer_state["is_running"] = False
         timer_state["allocated_time"] = mins * 60
         timer_state["time_left"] = mins * 60
@@ -136,7 +146,6 @@ def main(page: ft.Page):
         page.update()
 
     def reset_timer(e):
-        # MODIFIED: Resets to whatever custom time the user allocated, not a hardcoded 60:00
         timer_state["is_running"] = False
         timer_state["time_left"] = timer_state["allocated_time"]
 
@@ -146,7 +155,8 @@ def main(page: ft.Page):
 
     # --- INITIAL LOAD ---
     for t in load_tasks():
-        add_task_ui(t['title'], t.get('is_done', False))
+        # Load the date if it exists, otherwise leave it blank for old tasks
+        add_task_ui(t['title'], t.get('is_done', False), t.get('date', ''))
 
     # --- TAB CONTENT SCREENS ---
     tasks_content = ft.Column([
@@ -165,7 +175,6 @@ def main(page: ft.Page):
         alignment=ft.MainAxisAlignment.CENTER
     )
 
-    # ADDED: A row to hold the input field and the 'Set' button side-by-side
     timer_setup_row = ft.Row(
         controls=[
             timer_input,
@@ -177,7 +186,7 @@ def main(page: ft.Page):
     focus_content = ft.Column(
         controls=[
             ft.Container(height=30),
-            timer_setup_row,  # Placed the setup row here
+            timer_setup_row,
             ft.Container(height=20),
             timer_text,
             timer_controls
