@@ -1,6 +1,6 @@
 import flet as ft
 import time
-import threading
+import asyncio
 from app import load_tasks, save_tasks, Task
 
 
@@ -53,21 +53,38 @@ def main(page: ft.Page):
             stats_text.value = get_stats()
             page.update()
 
-    # --- THE MULTITHREADING FIX ---
-    def start_timer(e):
-        def run_countdown():
-            seconds = 25 * 60
-            while seconds > 0:
-                mins, secs = divmod(seconds, 60)
-                timer_text.value = f"{mins:02d}:{secs:02d}"
-                timer_text.update()  # Update just the text
-                time.sleep(1)
-                seconds -= 1
-            timer_text.value = "Done!"
-            timer_text.update()
+    # --- THE ASYNC ANDROID TIMER ---
+    timer_state = {"is_running": False}
 
-        # This launches the countdown in the background so the UI doesn't freeze
-        threading.Thread(target=run_countdown, daemon=True).start()
+    def start_timer(e):
+        if timer_state["is_running"]:
+            return
+
+        timer_state["is_running"] = True
+
+        # 1. Use an 'async' function so it runs in Flet's native event loop
+        async def run_countdown():
+            end_time = time.time() + (25 * 60)
+
+            while True:
+                seconds_left = int(end_time - time.time())
+
+                if seconds_left <= 0:
+                    break
+
+                mins, secs = divmod(seconds_left, 60)
+                timer_text.value = f"{mins:02d}:{secs:02d}"
+                page.update()  # 2. Use page.update() to guarantee Android refreshes the UI
+
+                # 3. Use async sleep so the app doesn't freeze
+                await asyncio.sleep(0.5)
+
+            timer_text.value = "Done!"
+            page.update()
+            timer_state["is_running"] = False
+
+        # 4. Use Flet's built-in background task runner instead of raw threading
+        page.run_task(run_countdown)
 
     # --- INITIAL LOAD ---
     for t in load_tasks():
@@ -123,4 +140,3 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     ft.run(main)
-
