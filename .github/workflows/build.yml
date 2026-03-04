@@ -20,25 +20,31 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Accept Android Licenses
-        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 1. Lock the internal app compiler to 0.80.3
-      - name: Lock App Requirements
-        run: echo "flet==0.80.3" > requirements.txt
+      # THE GOD-MODE FIX: A custom function that perfectly safely absorbs Flet's broken 'None' variables
+      - name: Patch Python Unicode Bug Globally
+        run: |
+          cat << 'EOF' > sitecustomize.py
+          import builtins
+          def legacy_unicode(data='', encoding='utf-8', errors='strict'):
+              if encoding is None:
+                  encoding = 'utf-8'
+              if isinstance(data, bytes):
+                  return data.decode(encoding, errors)
+              return str(data)
+          builtins.unicode = legacy_unicode
+          EOF
+          echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
 
-      # 2. Lock the cloud server to 0.80.3 (THIS WAS MISSING BEFORE!)
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.80.3 flet-cli==0.80.3
 
-      # 3. Build the APK smoothly
       - name: Build APK
         env:
           _JAVA_OPTIONS: "-Xmx3200m"
