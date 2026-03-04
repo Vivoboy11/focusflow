@@ -11,64 +11,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ── 2. Python 3.12 ────────────────────────────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
-      # ── 3. Java 17 ────────────────────────────────────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
-      # ── 4. Install Flet ───────────────────────────────────────────────────
       - name: Install Flet
         run: |
           python -m pip install --upgrade pip
           pip install flet
 
-      # ── 5. Install app dependencies ───────────────────────────────────────
       - name: Install App Dependencies
         run: |
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
 
-      # ── 6. Create pyproject.toml if missing ───────────────────────────────
       - name: Create pyproject.toml
         run: |
           if [ ! -f pyproject.toml ]; then
-            cat > pyproject.toml << 'TOML'
-[project]
-name = "focusflow"
-version = "1.0.0"
-description = "FocusFlow Mobile App"
-dependencies = ["flet"]
-
-[tool.flet]
-org = "com.focusflow"
-product = "FocusFlow"
-TOML
+            printf '[project]\nname = "focusflow"\nversion = "1.0.0"\ndescription = "FocusFlow Mobile App"\ndependencies = ["flet"]\n\n[tool.flet]\norg = "com.focusflow"\nproduct = "FocusFlow"\n' > pyproject.toml
           fi
 
-      # ── 7. Build APK ──────────────────────────────────────────────────────
-      #   --yes                        → auto-answer YES to all prompts
-      #                                  (including "install Flutter SDK?")
-      #   FLET_CLI_SKIP_FLUTTER_DOCTOR → skip flutter doctor entirely,
-      #                                  preventing the unicode crash
       - name: Build APK
         env:
           FLET_CLI_SKIP_FLUTTER_DOCTOR: "true"
         run: flet build apk --yes --verbose
 
-      # ── 8. Verify APK ─────────────────────────────────────────────────────
       - name: Verify APK exists
         run: |
           find build/apk -name "*.apk" | tee /tmp/apk_list.txt
@@ -76,7 +54,6 @@ TOML
             echo "ERROR: No APK found!" && exit 1
           fi
 
-      # ── 9. Upload APK ─────────────────────────────────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
