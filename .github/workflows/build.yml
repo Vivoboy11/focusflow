@@ -38,43 +38,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet-cli==${{ env.FLET_CLI_VERSION }}
 
-      - name: Patch unicode bug in flet-cli only
-        run: |
-          # Get path to flet_cli package ONLY - do not touch any other packages
-          FLET_CLI_DIR=$(python -c "import flet_cli, os; print(os.path.dirname(flet_cli.__file__))")
-          echo "Patching only: $FLET_CLI_DIR"
-
-          # Show files that contain unicode( before patching
-          grep -rl --include="*.py" "unicode(" "$FLET_CLI_DIR" 2>/dev/null
-
-          # Patch unicode(x, enc) -> x.decode(enc) if isinstance(x, bytes) else str(x)
-          find "$FLET_CLI_DIR" -name "*.py" | while read f; do
-            if grep -q "unicode(" "$f" 2>/dev/null; then
-              echo "Patching: $f"
-              python3 - "$f" << 'PYEOF'
-          import re, sys
-          path = sys.argv[1]
-          with open(path, 'r', encoding='utf-8') as fh:
-              src = fh.read()
-          # unicode(x, enc) -> (x).decode(enc) if isinstance((x), bytes) else str((x))
-          src = re.sub(
-              r'unicode\(([^,)]+),\s*([^)]+)\)',
-              r'((\1).decode(\2) if isinstance((\1), bytes) else str(\1))',
-              src
-          )
-          # unicode(x) -> str(x)
-          src = re.sub(r'unicode\(([^)]+)\)', r'str(\1)', src)
-          with open(path, 'w', encoding='utf-8') as fh:
-              fh.write(src)
-          print(f"Patched: {path}")
-          PYEOF
-            fi
-          done
-          echo "Patch complete"
+      - name: Patch unicode bug in flet-cli
+        run: python3 patch_flet_unicode.py
 
       - name: Accept Android licenses
-        run: |
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Install App Dependencies
         run: |
@@ -85,7 +53,7 @@ jobs:
       - name: Create pyproject.toml
         run: |
           if [ ! -f pyproject.toml ]; then
-            printf '[project]\nname = "focusflow"\nversion = "%s"\ndescription = "FocusFlow Mobile App"\ndependencies = ["flet"]\n\n[tool.flet]\norg = "com.focusflow"\nproduct = "FocusFlow"\n' "${{ env.BUILD_VERSION }}" > pyproject.toml
+            printf '[project]\nname = "focusflow"\nversion = "%s"\ndescription = "FocusFlow"\ndependencies = ["flet"]\n\n[tool.flet]\norg = "com.focusflow"\nproduct = "FocusFlow"\n' "${{ env.BUILD_VERSION }}" > pyproject.toml
           fi
 
       - name: Build APK
