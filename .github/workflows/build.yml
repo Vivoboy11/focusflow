@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # This allows you to trigger the build manually
 
 jobs:
   build:
@@ -22,8 +22,7 @@ jobs:
           pip install flet
 
       - name: Build APK
-        # The 'yes' command automatically answers 'y' to the Flutter install prompt
-        run: yes | flet build apk
+        run: flet build apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
