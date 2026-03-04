@@ -32,25 +32,24 @@ jobs:
 
       - name: Patch Flet unicode bug
         run: |
-          # Find all flet_cli Python files containing the `unicode` call
-          FLET_PATH=$(python -c "import flet_cli; import os; print(os.path.dirname(flet_cli.__file__))")
-          echo "Flet CLI path: $FLET_PATH"
+          # Find flet_cli location using pip show (works even without importable module)
+          FLET_CLI_PATH=$(pip show flet-cli 2>/dev/null | grep Location | awk '{print $2}')
+          echo "flet-cli location: $FLET_CLI_PATH"
 
-          # Replace `unicode(` with `str(` throughout flet_cli source
-          # `unicode` is a Python 2 built-in that doesn't exist in Python 3
-          grep -rl "unicode(" "$FLET_PATH" | while read f; do
-            echo "Patching: $f"
-            sed -i 's/unicode(/str(/g' "$f"
-          done
-
-          # Also patch rich library if it's calling unicode
-          RICH_PATH=$(python -c "import rich; import os; print(os.path.dirname(rich.__file__))")
-          grep -rl "unicode(" "$RICH_PATH" | while read f; do
-            echo "Patching rich: $f"
-            sed -i 's/unicode(/str(/g' "$f"
-          done
-
-          echo "Patch complete"
+          if [ -n "$FLET_CLI_PATH" ]; then
+            echo "Patching unicode -> str in flet_cli..."
+            find "$FLET_CLI_PATH/flet_cli" -name "*.py" | xargs grep -l "unicode(" 2>/dev/null | while read f; do
+              echo "  Patching: $f"
+              sed -i 's/unicode(/str(/g' "$f"
+            done
+            echo "Patch complete"
+          else
+            echo "WARNING: flet-cli not found via pip show, trying fallback..."
+            find $(python -c "import sys; print(' '.join(sys.path))") -path "*/flet_cli/*.py" 2>/dev/null | xargs grep -l "unicode(" 2>/dev/null | while read f; do
+              echo "  Patching: $f"
+              sed -i 's/unicode(/str(/g' "$f"
+            done
+          fi
 
       - name: Install App Dependencies
         run: |
