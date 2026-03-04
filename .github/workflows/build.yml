@@ -10,10 +10,9 @@ env:
   FLET_CLI_VERSION: "0.81.0"
   BUILD_NUMBER: 1
   BUILD_VERSION: 1.0.0
-  PYTHON_VERSION: "3.12"
-  JAVA_VERSION: "21"
   PYTHONUTF8: "1"
   FLET_CLI_NO_RICH_OUTPUT: "1"
+  FLET_CLI_SKIP_FLUTTER_DOCTOR: "1"
 
 jobs:
   build:
@@ -26,18 +25,32 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "3.12"
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: "21"
 
-      - name: Install flet-cli only
+      - name: Install flet-cli
         run: |
           python -m pip install --upgrade pip
           pip install flet-cli==${{ env.FLET_CLI_VERSION }}
+
+      - name: Patch unicode bug in flet-cli
+        run: |
+          SITE=$(python -c "import site; print(site.getsitepackages()[0])")
+          echo "Patching $SITE..."
+          grep -rl --include="*.py" "unicode(" "$SITE" 2>/dev/null | while read f; do
+            echo "  -> $f"
+            sed -i 's/\bunicode(/str(/g' "$f"
+          done
+          echo "Patch done."
+
+      - name: Accept Android licenses
+        run: |
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Install App Dependencies
         run: |
