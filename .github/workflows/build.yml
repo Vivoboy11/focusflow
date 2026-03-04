@@ -28,7 +28,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 4. Install latest Flet ────────────────────────────────────────────
+      # ── 4. Install Flet ───────────────────────────────────────────────────
       - name: Install Flet
         run: |
           python -m pip install --upgrade pip
@@ -41,17 +41,31 @@ jobs:
             pip install -r requirements.txt
           fi
 
-      # ── 6. Build APK ──────────────────────────────────────────────────────
-      #   FLET_CLI_NO_RICH_OUTPUT=1  → disables the Rich console renderer that
-      #                                uses Python-2-only `unicode` type calls
-      #   --skip-flutter-doctor      → skips flutter doctor output parsing
-      #                                entirely (added in Flet 0.25+)
+      # ── 6. Pre-install Flutter SDK that Flet 0.81 requires ────────────────
+      #       Flet 0.81 needs Flutter 3.41.2 and prompts "Install now? [y/n]"
+      #       in CI there is no terminal to answer, so we pre-install the
+      #       exact version Flet expects to skip the prompt entirely.
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.2'
+          channel: 'stable'
+          cache: true
+
+      - name: Disable Flutter Analytics
+        run: |
+          flutter config --no-analytics
+          flutter config --no-cli-animations
+
+      # ── 7. Build APK ──────────────────────────────────────────────────────
+      #       echo "y" pipes "yes" to any remaining prompts
+      #       FLET_CLI_NO_RICH_OUTPUT suppresses unicode crash
       - name: Build APK
         env:
           FLET_CLI_NO_RICH_OUTPUT: "1"
-        run: flet build apk --skip-flutter-doctor --verbose
+        run: echo "y" | flet build apk --skip-flutter-doctor --verbose
 
-      # ── 7. Verify APK ─────────────────────────────────────────────────────
+      # ── 8. Verify APK ─────────────────────────────────────────────────────
       - name: Verify APK exists
         run: |
           find build/apk -name "*.apk" | tee /tmp/apk_list.txt
@@ -59,7 +73,7 @@ jobs:
             echo "ERROR: No APK found!" && exit 1
           fi
 
-      # ── 8. Upload APK ─────────────────────────────────────────────────────
+      # ── 9. Upload APK ─────────────────────────────────────────────────────
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
