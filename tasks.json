@@ -1,1 +1,38 @@
-[]
+[
+    {
+        "title": "[25m] Outline Core Steps to Fulfill Request",
+        "is_done": false,
+        "date": "Sat, Mar 07",
+        "priority": 2
+    },
+    {
+        "title": "[25m] Map Steps to Pomodoro Tasks & Allocate Time",
+        "is_done": false,
+        "date": "Sat, Mar 07",
+        "priority": 2
+    },
+    {
+        "title": "[25m] Integrate Short and Long Breaks into Schedule",
+        "is_done": false,
+        "date": "Sat, Mar 07",
+        "priority": 2
+    },
+    {
+        "title": "[15m] Long Break",
+        "is_done": false,
+        "date": "Sat, Mar 07",
+        "priority": 2
+    },
+    {
+        "title": "[25m] Format Schedule into JSON Array Structure",
+        "is_done": false,
+        "date": "Sat, Mar 07",
+        "priority": 2
+    },
+    {
+        "title": "[25m] Final Review: JSON Validity & Adherence to All Constraints",
+        "is_done": false,
+        "date": "Sat, Mar 07",
+        "priority": 2
+    }
+]
