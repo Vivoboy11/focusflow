@@ -1,3 +1,7 @@
 # This project currently uses only the Python Standard Library.
 # No external dependencies are required.
 flet==0.80.3
+fastapi
+uvicorn
+pydantic
+google-genai

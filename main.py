@@ -1,327 +1,406 @@
 import flet as ft
-import time
 import asyncio
-import json
-from datetime import datetime
-import google.generativeai as genai
-from app import load_tasks, save_tasks, Task
+import requests
 
-# --- AI CONFIGURATION ---
-# Replace with your actual Gemini API Key
-API_KEY = "AIzaSyCu0S_xarP7-qe4JbMVxqWzrOd_BdEbDuU"
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+API_URL = "http://127.0.0.1:8000"
 
-# --- MODERN COLOR PALETTE ---
-BG_COLOR = "#09090b"
-CARD_BG = "#18181b"
+BG_COLOR      = "#09090b"
+CARD_BG       = "#18181b"
 ACCENT_PURPLE = "#8b5cf6"
-ACCENT_BLUE = "#3b82f6"
-TEXT_MAIN = "#f4f4f5"
-TEXT_MUTED = "#a1a1aa"
+ACCENT_BLUE   = "#3b82f6"
+TEXT_MAIN     = "#f4f4f5"
+TEXT_MUTED    = "#a1a1aa"
 
 
 def main(page: ft.Page):
-    # --- PAGE STYLING ---
-    page.title = "FocusFlow AI"
-    page.bgcolor = BG_COLOR
-    page.padding = 0
-    page.theme_mode = ft.ThemeMode.LIGHT
+    page.title        = "FocusFlow AI"
+    page.bgcolor      = BG_COLOR
+    page.padding      = 0
+    page.theme_mode   = ft.ThemeMode.DARK
+    page.window.width  = 420
+    page.window.height = 800
 
-    # --- CUSTOM FLOATING APP BAR ---
+    # --- HEADER ---
     header = ft.Container(
         content=ft.Row([
-            ft.Icon(ft.Icons.AUTO_AWESOME_MOSAIC_ROUNDED, color=ACCENT_BLUE, size=30),
-            ft.Text("FocusFlow", weight="bold", size=28, color=TEXT_MAIN),
+            ft.Icon(ft.Icons.AUTO_AWESOME, color=ACCENT_BLUE, size=30),
+            ft.Text("FocusFlow", weight=ft.FontWeight.BOLD, size=28, color=TEXT_MAIN),
         ], alignment=ft.MainAxisAlignment.CENTER),
-        padding=ft.padding.only(top=40, bottom=20),
-        bgcolor="#CC09090b",
+        padding=ft.Padding(0, 40, 0, 20),   # ✅ Padding.only replacement
     )
 
-    # --- UI COMPONENTS ---
-    tasks_view = ft.Column(spacing=15)
+    # --- TASK LIST ---
+    tasks_view = ft.Column(spacing=15, scroll=ft.ScrollMode.AUTO)
 
-    # ⚡ BULLETPROOF GLOWING TIMER ⚡
-    timer_text = ft.Text("25:00", size=65, weight="bold", color=TEXT_MAIN)
+    # --- TIMER DISPLAY ---
+    timer_text = ft.Text("25:00", size=65, weight=ft.FontWeight.BOLD, color=TEXT_MAIN)
     timer_display = ft.Container(
         content=ft.Stack([
             ft.Container(content=timer_text, alignment=ft.Alignment(0, 0))
         ]),
-        width=280,
-        height=280,
+        width=280, height=280,
         shape=ft.BoxShape.CIRCLE,
         bgcolor="#0f172a",
-        border=ft.border.all(2, ACCENT_BLUE),
-        shadow=ft.BoxShadow(spread_radius=5, blur_radius=40, color="#663b82f6"),
-        animate=500
+        border=ft.Border(                   # ✅ Border.all replacement
+            top=ft.BorderSide(2, ACCENT_BLUE),
+            bottom=ft.BorderSide(2, ACCENT_BLUE),
+            left=ft.BorderSide(2, ACCENT_BLUE),
+            right=ft.BorderSide(2, ACCENT_BLUE),
+        ),
+        shadow=ft.BoxShadow(
+            spread_radius=5, blur_radius=40,
+            color="#663b82f6",
+            offset=ft.Offset(0, 0),
+        ),
     )
 
-    # Timer Setting Input
-    timer_input = ft.TextField(
-        value="25",
-        label="Mins",
-        width=80,
-        border_radius=15,
-        border_color=ACCENT_BLUE,
-        text_align=ft.TextAlign.CENTER,
-        keyboard_type=ft.KeyboardType.NUMBER,
-        text_style=ft.TextStyle(color=TEXT_MAIN),
-    )
+    # --- API HELPERS ---
+    def refresh_tasks():
+        tasks_view.controls.clear()
+        try:
+            response = requests.get(f"{API_URL}/tasks", timeout=4)
+            if response.status_code == 200:
+                for t in response.json():
+                    add_task_to_ui(t["title"], t.get("is_done", False), t.get("date", ""))
+        except Exception as e:
+            print(f"Server not reachable: {e}")
+        page.update()
 
-    new_task_input = ft.TextField(
-        hint_text="Add a manual task...",
-        expand=True,
-        border_radius=30,
-        border_color=TEXT_MUTED,
-        content_padding=20,
-        text_style=ft.TextStyle(color=TEXT_MAIN)
-    )
+    def add_task_to_ui(title, is_done, date_str=""):
+        # ✅ FIX: decoration moved into ft.TextStyle
+        label = ft.Text(
+            title, expand=True, size=15,
+            color=TEXT_MUTED if is_done else TEXT_MAIN,
+            style=ft.TextStyle(
+                decoration=ft.TextDecoration.LINE_THROUGH if is_done else ft.TextDecoration.NONE
+            ),
+        )
 
+        def on_check_change(e):
+            label.color = TEXT_MUTED if e.control.value else TEXT_MAIN
+            label.style = ft.TextStyle(
+                decoration=ft.TextDecoration.LINE_THROUGH if e.control.value
+                           else ft.TextDecoration.NONE
+            )
+            page.update()
+
+        cb = ft.Checkbox(value=is_done, fill_color=ACCENT_BLUE, on_change=on_check_change)
+        container = ft.Container(
+            content=ft.Row([cb, label]),
+            bgcolor=CARD_BG, padding=12, border_radius=15,
+            border=ft.Border(
+                top=ft.BorderSide(1, "#19f4f4f5"),
+                bottom=ft.BorderSide(1, "#19f4f4f5"),
+                left=ft.BorderSide(1, "#19f4f4f5"),
+                right=ft.BorderSide(1, "#19f4f4f5"),
+            ),
+            animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+        )
+        tasks_view.controls.append(container)
+        page.update()
+
+    # --- INPUTS ---
     ai_input = ft.TextField(
         hint_text="Ask AI to plan your session...",
-        expand=True,
-        multiline=True,
-        min_lines=1,
-        max_lines=3,
-        border_width=0,
-        bgcolor="#00000000",
-        text_style=ft.TextStyle(color=TEXT_MAIN)
+        expand=True, border_width=0, bgcolor="#00000000",
+        text_style=ft.TextStyle(color=TEXT_MAIN),
+        cursor_color=TEXT_MAIN,
     )
     ai_loading = ft.ProgressRing(visible=False, width=20, height=20, color=ACCENT_PURPLE)
 
-    def get_stats():
-        tasks = load_tasks()
-        completed = len([t for t in tasks if t.get('is_done')])
-        total = len(tasks)
-        return f"{completed}/{total} Tasks Completed"
+    new_task_input = ft.TextField(
+        hint_text="Manual task...", expand=True, border_radius=30,
+        border_color=TEXT_MUTED,
+        content_padding=ft.Padding(20, 12, 20, 12),   # ✅ Padding.symmetric replacement
+        text_style=ft.TextStyle(color=TEXT_MAIN),
+        cursor_color=TEXT_MAIN,
+    )
 
-    stats_text = ft.Text(get_stats(), size=13, color=ACCENT_BLUE, weight="bold")
-
-    def delete_task(task_container, task_title):
-        tasks_view.controls.remove(task_container)
-        current_data = load_tasks()
-        save_tasks([t for t in current_data if t['title'] != task_title])
-        stats_text.value = get_stats()
-        page.update()
-
-    def toggle_task_status(e, task_title, label_text):
-        current_data = load_tasks()
-        for t in current_data:
-            if t['title'] == task_title:
-                t['is_done'] = e.control.value
-        save_tasks(current_data)
-
-        label_text.style = ft.TextStyle(
-            color=TEXT_MUTED if e.control.value else TEXT_MAIN,
-            decoration=ft.TextDecoration.LINE_THROUGH if e.control.value else ft.TextDecoration.NONE
-        )
-
-        stats_text.value = get_stats()
-        page.update()
-
-    def clear_completed(e):
-        current_data = load_tasks()
-        incomplete_tasks = [t for t in current_data if not t.get('is_done')]
-        save_tasks(incomplete_tasks)
-        tasks_view.controls.clear()
-        for t in incomplete_tasks:
-            add_task_ui(t['title'], t.get('is_done', False), t.get('date', ''))
-        stats_text.value = get_stats()
-        page.update()
-
-    def add_task_ui(task_title, is_done=False, task_date=""):
-        label_text = ft.Text(
-            task_title,
-            expand=True,
-            size=15,
-            style=ft.TextStyle(
-                color=TEXT_MUTED if is_done else TEXT_MAIN,
-                decoration=ft.TextDecoration.LINE_THROUGH if is_done else ft.TextDecoration.NONE
-            )
-        )
-
-        cb = ft.Checkbox(
-            value=is_done,
-            fill_color=ACCENT_BLUE,
-            on_change=lambda e: toggle_task_status(e, task_title, label_text)
-        )
-
-        delete_button = ft.IconButton(
-            icon=ft.Icons.CLOSE_ROUNDED,
-            icon_color=TEXT_MUTED,
-            on_click=lambda _: delete_task(task_container, task_title)
-        )
-
-        task_container = ft.Container(
-            content=ft.Row([cb, label_text, delete_button]),
-            bgcolor=CARD_BG,
-            padding=10,
-            border_radius=15,
-            border=ft.border.all(1, "#19f4f4f5"),
-            animate=300
-        )
-
-        tasks_view.controls.append(task_container)
-        page.update()
-
-    def handle_add_manual(e):
-        if new_task_input.value:
-            _save_and_display_task(new_task_input.value)
-            new_task_input.value = ""
-            stats_text.value = get_stats()
-            page.update()
-
-    def _save_and_display_task(title_string):
-        current_date = datetime.now().strftime("%b %d")
-        add_task_ui(title_string, False, current_date)
-        tasks = load_tasks()
-        new_task_dict = Task(title_string).to_dict()
-        new_task_dict["date"] = current_date
-        tasks.append(new_task_dict)
-        save_tasks(tasks)
-
-    def handle_ai_generation(e):
+    # --- ACTION HANDLERS ---
+    def handle_ai_gen(e):
         if not ai_input.value: return
         ai_loading.visible = True
         page.update()
-        prompt = f"Break this into a Pomodoro schedule JSON array: {ai_input.value}. Format: [{{'task': 'name', 'duration_minutes': 25}}]"
         try:
-            response = model.generate_content(prompt)
-            clean_text = response.text.strip()
-            if "```json" in clean_text:
-                clean_text = clean_text.split("```json")[1].split("```")[0]
-            elif "```" in clean_text:
-                clean_text = clean_text.split("```")[1].split("```")[0]
-
-            schedule = json.loads(clean_text)
-            for item in schedule:
-                _save_and_display_task(f"{item['duration_minutes']}m • {item['task']}")
+            requests.post(f"{API_URL}/generate-schedule",
+                          json={"prompt": ai_input.value}, timeout=30)
+            refresh_tasks()
             ai_input.value = ""
-        except:
-            pass
+        except Exception as ex:
+            print(f"AI generate error: {ex}")
         ai_loading.visible = False
-        stats_text.value = get_stats()
         page.update()
 
-    # Timer Logic State
-    timer_state = {
-        "is_running": False,
-        "time_left": 25 * 60,
-        "allocated_time": 25 * 60
-    }
-
-    def set_timer_duration(e):
+    def handle_add_manual(e):
+        if not new_task_input.value: return
         try:
-            mins = int(timer_input.value)
-            if mins <= 0: mins = 25
-        except:
-            mins = 25
+            requests.post(f"{API_URL}/tasks",
+                          json={"title": new_task_input.value, "is_done": False}, timeout=5)
+            refresh_tasks()
+            new_task_input.value = ""
+        except Exception as ex:
+            print(f"Add task error: {ex}")
+        page.update()
 
+    def clear_completed(e):
+        try:
+            requests.delete(f"{API_URL}/tasks/clear-completed", timeout=5)
+            refresh_tasks()
+        except Exception as ex:
+            print(f"Clear error: {ex}")
+
+    # ─── TIMER STATE ──────────────────────────────────────────
+    timer_state = {"is_running": False, "time_left": 25 * 60, "total": 25 * 60}
+
+    def apply_minutes(minutes):
         timer_state["is_running"] = False
-        timer_state["allocated_time"] = mins * 60
-        timer_state["time_left"] = mins * 60
-        timer_text.value = f"{mins:02d}:00"
-        timer_display.shadow.color = "#663b82f6"
+        timer_state["time_left"]  = minutes * 60
+        timer_state["total"]      = minutes * 60
+        mins, secs = divmod(minutes * 60, 60)
+        timer_text.value = f"{mins:02d}:{secs:02d}"
+        try:
+            timer_display.shadow.color = "#663b82f6"
+        except Exception:
+            pass
         page.update()
 
     def start_timer(e):
         if timer_state["is_running"]: return
         timer_state["is_running"] = True
-        timer_display.shadow.color = "#ef4444"
+        try:
+            timer_display.shadow.color = "#ef4444"
+        except Exception:
+            pass
         page.update()
 
-        async def run():
+        async def countdown():
             while timer_state["is_running"] and timer_state["time_left"] > 0:
+                await asyncio.sleep(1)
                 timer_state["time_left"] -= 1
                 mins, secs = divmod(timer_state["time_left"], 60)
                 timer_text.value = f"{mins:02d}:{secs:02d}"
                 page.update()
-                await asyncio.sleep(1)
             if timer_state["time_left"] <= 0:
-                timer_text.value = "DONE"
+                timer_text.value = "DONE! 🎉"
             timer_state["is_running"] = False
+            try:
+                timer_display.shadow.color = "#663b82f6"
+            except Exception:
+                pass
+            page.update()
 
-        page.run_task(run)
+        page.run_task(countdown)
 
     def pause_timer(e):
         timer_state["is_running"] = False
-        timer_display.shadow.color = "#663b82f6"
+        try:
+            timer_display.shadow.color = "#663b82f6"
+        except Exception:
+            pass
         page.update()
 
     def reset_timer(e):
         timer_state["is_running"] = False
-        timer_state["time_left"] = timer_state["allocated_time"]
-        mins, secs = divmod(timer_state["time_left"], 60)
+        timer_state["time_left"]  = timer_state["total"]
+        mins, secs = divmod(timer_state["total"], 60)
         timer_text.value = f"{mins:02d}:{secs:02d}"
-        timer_display.shadow.color = "#663b82f6"
+        try:
+            timer_display.shadow.color = "#663b82f6"
+        except Exception:
+            pass
         page.update()
 
-    # Initial Load
-    for t in load_tasks(): add_task_ui(t['title'], t.get('is_done', False), t.get('date', ''))
+    # ─── TIMER SETTINGS DIALOG ────────────────────────────────
+    custom_input = ft.TextField(
+        label="Custom minutes",
+        keyboard_type=ft.KeyboardType.NUMBER,
+        border_color=ACCENT_PURPLE,
+        focused_border_color=ACCENT_PURPLE,
+        label_style=ft.TextStyle(color=TEXT_MUTED),
+        text_style=ft.TextStyle(color=TEXT_MAIN),
+        cursor_color=ACCENT_PURPLE,
+        bgcolor=BG_COLOR,
+        border_radius=10,
+        width=180,
+    )
 
-    ai_container = ft.Container(
+    timer_dialog = ft.AlertDialog(modal=True)
+
+    def make_preset(label, mins, color):
+        def on_click(e):
+            apply_minutes(mins)
+            timer_dialog.open = False
+            page.update()
+        return ft.Container(
+            content=ft.Column([
+                ft.Text(f"{mins}m", size=20, weight=ft.FontWeight.BOLD,
+                        color=BG_COLOR, text_align=ft.TextAlign.CENTER),
+                ft.Text(label, size=11, color=BG_COLOR,
+                        text_align=ft.TextAlign.CENTER),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+               alignment=ft.MainAxisAlignment.CENTER, spacing=2),
+            width=70, height=65,
+            bgcolor=color,
+            border_radius=14,
+            alignment=ft.Alignment(0, 0),
+            on_click=on_click,
+            ink=True,
+        )
+
+    def apply_custom(e):
+        val = custom_input.value.strip()
+        if val.isdigit() and int(val) > 0:
+            apply_minutes(int(val))
+            timer_dialog.open = False
+            page.update()
+        else:
+            custom_input.error_text = "Enter a valid number"
+            page.update()
+
+    def open_settings(e):
+        custom_input.value      = ""
+        custom_input.error_text = ""
+        timer_dialog.open = True
+        page.update()
+
+    timer_dialog.title   = ft.Text("⏱  Timer Settings",
+                                    color=TEXT_MAIN, weight=ft.FontWeight.BOLD, size=18)
+    timer_dialog.bgcolor = CARD_BG
+    timer_dialog.shape   = ft.RoundedRectangleBorder(radius=20)
+    timer_dialog.content = ft.Column([
+        ft.Text("Quick Presets", color=TEXT_MUTED, size=12,
+                style=ft.TextStyle(letter_spacing=1)),
+        ft.Row([
+            make_preset("Short\nBreak",  5,  "#22c55e"),
+            make_preset("Long\nBreak",  15,  "#3b82f6"),
+            make_preset("Pomodoro",     25,  "#8b5cf6"),
+            make_preset("Deep\nWork",   50,  "#f59e0b"),
+        ], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+        ft.Divider(color="#2a2a3a", height=28),
+        ft.Text("Custom Duration", color=TEXT_MUTED, size=12,
+                style=ft.TextStyle(letter_spacing=1)),
+        ft.Row([
+            custom_input,
+            ft.IconButton(
+                icon=ft.Icons.CHECK_CIRCLE,
+                icon_color=ACCENT_PURPLE,
+                icon_size=32,
+                tooltip="Apply",
+                on_click=apply_custom,
+            ),
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+    ], tight=True, spacing=12, width=310)
+    timer_dialog.actions = [
+        ft.TextButton("Cancel",
+                      on_click=lambda e: (setattr(timer_dialog, "open", False),
+                                          page.update()),
+                      style=ft.ButtonStyle(color=TEXT_MUTED)),
+    ]
+    timer_dialog.actions_alignment = ft.MainAxisAlignment.END
+    page.overlay.append(timer_dialog)
+
+    # ─── LAYOUT ───────────────────────────────────────────────
+    ai_bar = ft.Container(
         content=ft.Row([
             ft.Icon(ft.Icons.AUTO_AWESOME, color=ACCENT_PURPLE),
             ai_input, ai_loading,
-            ft.IconButton(icon=ft.Icons.SEND_ROUNDED, icon_color=ACCENT_PURPLE, on_click=handle_ai_generation)
+            ft.IconButton(icon=ft.Icons.SEND, icon_color=ACCENT_PURPLE,
+                          on_click=handle_ai_gen),
         ]),
-        padding=10, bgcolor=CARD_BG, border_radius=30, border=ft.border.all(1, "#4C8b5cf6")
+        padding=10, bgcolor=CARD_BG, border_radius=30,
+        border=ft.Border(
+            top=ft.BorderSide(1, "#4C8b5cf6"),
+            bottom=ft.BorderSide(1, "#4C8b5cf6"),
+            left=ft.BorderSide(1, "#4C8b5cf6"),
+            right=ft.BorderSide(1, "#4C8b5cf6"),
+        ),
     )
 
     tasks_content = ft.Container(
         content=ft.Column([
-            ai_container, ft.Container(height=10),
-            ft.Row([new_task_input,
-                    ft.FloatingActionButton(icon=ft.Icons.ADD, on_click=handle_add_manual, bgcolor=ACCENT_BLUE,
-                                            mini=True, foreground_color=TEXT_MAIN)]),
-            ft.Row(
-                [stats_text, ft.TextButton("Clean", on_click=clear_completed, style=ft.ButtonStyle(color=TEXT_MUTED))],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            tasks_view
-        ], scroll=ft.ScrollMode.AUTO),
-        padding=20, expand=True
+            ai_bar,
+            ft.Container(height=10),
+            ft.Row([
+                new_task_input,
+                ft.FloatingActionButton(icon=ft.Icons.ADD, on_click=handle_add_manual,
+                                        bgcolor=ACCENT_BLUE, mini=True),
+            ]),
+            ft.Row([
+                ft.Text("Task List", color=ACCENT_BLUE, weight=ft.FontWeight.BOLD),
+                ft.TextButton("Clear Done", on_click=clear_completed),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            tasks_view,
+        ]),
+        padding=20, expand=True,
     )
 
     focus_content = ft.Container(
         content=ft.Column([
-            ft.Container(height=40),
-            timer_display,
-            ft.Container(height=40),
+            ft.Container(height=20),
             ft.Row([
-                ft.IconButton(icon=ft.Icons.REPLAY_ROUNDED, on_click=reset_timer, icon_size=30),
-                ft.FloatingActionButton(icon=ft.Icons.PLAY_ARROW_ROUNDED, on_click=start_timer, bgcolor=TEXT_MAIN,
-                                        foreground_color=BG_COLOR, width=65, height=65),
-                ft.IconButton(icon=ft.Icons.PAUSE_ROUNDED, on_click=pause_timer, icon_size=30),
+                ft.Container(expand=True),
+                ft.IconButton(
+                    icon=ft.Icons.SETTINGS,
+                    icon_color=TEXT_MUTED,
+                    icon_size=26,
+                    tooltip="Timer Settings",
+                    on_click=open_settings,
+                ),
+            ]),
+            ft.Container(height=10),
+            timer_display,
+            ft.Container(height=20),
+            ft.Row([
+                ft.Container(
+                    content=ft.Text(f"{m}m", size=12, color=TEXT_MAIN),
+                    bgcolor="#1e1e2e",
+                    border=ft.Border(
+                        top=ft.BorderSide(1, "#3a3a5a"),
+                        bottom=ft.BorderSide(1, "#3a3a5a"),
+                        left=ft.BorderSide(1, "#3a3a5a"),
+                        right=ft.BorderSide(1, "#3a3a5a"),
+                    ),
+                    border_radius=20,
+                    padding=ft.Padding(14, 7, 14, 7),  # ✅ Padding.symmetric replacement
+                    on_click=(lambda e, mins=m: apply_minutes(mins)),
+                    ink=True,
+                ) for m in [5, 15, 25, 50]
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+            ft.Container(height=30),
+            ft.Row([
+                ft.IconButton(icon=ft.Icons.REPLAY, on_click=reset_timer,
+                              icon_size=30, icon_color=TEXT_MUTED),
+                ft.FloatingActionButton(
+                    icon=ft.Icons.PLAY_ARROW, on_click=start_timer,
+                    bgcolor=TEXT_MAIN, foreground_color=BG_COLOR,
+                    width=65, height=65,
+                ),
+                ft.IconButton(icon=ft.Icons.PAUSE, on_click=pause_timer,
+                              icon_size=30, icon_color=TEXT_MUTED),
             ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Container(height=40),
-            ft.Container(
-                content=ft.Row([
-                    timer_input,
-                    ft.ElevatedButton("Set Timer", on_click=set_timer_duration, bgcolor=ACCENT_BLUE, color=TEXT_MAIN)
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                padding=20,
-                bgcolor=CARD_BG,
-                border_radius=20,
-                border=ft.border.all(1, "#19f4f4f5")
-            )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        expand=True
+        expand=True, visible=False,
     )
 
-    content_area = ft.Container(content=tasks_content, expand=True)
-
     def nav_change(e):
-        content_area.content = tasks_content if e.control.selected_index == 0 else focus_content
+        tasks_content.visible = (e.control.selected_index == 0)
+        focus_content.visible = (e.control.selected_index == 1)
         page.update()
 
-    page.add(header, content_area, ft.NavigationBar(
-        selected_index=0, bgcolor=CARD_BG, on_change=nav_change,
-        destinations=[
-            ft.NavigationBarDestination(icon=ft.Icons.LIST, label="Tasks"),
-            ft.NavigationBarDestination(icon=ft.Icons.TIMER, label="Focus")
-        ]
-    ))
+    page.add(
+        header,
+        ft.Column([tasks_content, focus_content], expand=True),
+        ft.NavigationBar(
+            selected_index=0, bgcolor=CARD_BG, on_change=nav_change,
+            destinations=[
+                ft.NavigationBarDestination(icon=ft.Icons.LIST_ALT,  label="Tasks"),
+                ft.NavigationBarDestination(icon=ft.Icons.TIMER,     label="Focus"),
+            ],
+        ),
+    )
+
+    refresh_tasks()
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    ft.run(main)   # ✅ ft.app → ft.run (0.80+)
